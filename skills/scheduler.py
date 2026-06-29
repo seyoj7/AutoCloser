@@ -1,6 +1,6 @@
 import os
 from dotenv import load_dotenv
-from skills import email_agent
+from . import email_agent
 
 load_dotenv()
 

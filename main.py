@@ -61,6 +61,32 @@ def main():
 
                     analysis = email_agent.analyze_reply(reply["body"])
 
+                    if analysis == "interested":
+                        result = scheduler.schedule_meeting(lead)
+                        csv_reader.mark_lead_status(DATA_PATH, lead["email"], "meeting_sent")
+                        print(f"[MAIN] {result}")
+                    elif analysis == "needs_more_info":
+                        followup = email_agent.generate_followup(lead, reply["body"])
+                        email_agent.send_email(lead["email"], followup["subject"], followup["body"])
+                        csv_reader.mark_lead_status(DATA_PATH, lead["email"], "followup_sent")
+                        print(f"[MAIN] Answered {lead['contact']}'s question, waiting for response")
+                    else:
+                        csv_reader.mark_lead_status(DATA_PATH, lead["email"], "not_interested")
+                        print(f"[MAIN] {lead['company']} marked as not interested")
+            else:
+                print(f"[MAIN] No reply yet from {lead['company']}")
+
+        # Followup sent -> check if they replied -> schedule meeting
+        elif lead["status"] == "followup_sent":
+            print(f"\n--- Followup Check ({lead['company']}) ---")
+
+            replies = email_agent.check_replies([lead])
+
+            if replies:
+                for reply in replies:
+                    print(f"[MAIN] Reply from {reply['sender']}: {reply['body'][:80]}...")
+                    analysis = email_agent.analyze_reply(reply["body"])
+
                     if scheduler.qualify_lead(lead, analysis):
                         result = scheduler.schedule_meeting(lead)
                         csv_reader.mark_lead_status(DATA_PATH, lead["email"], "meeting_sent")

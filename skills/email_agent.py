@@ -73,6 +73,54 @@ def generate_email(lead: dict, research_summary: str) -> dict:
         }
 
 
+def generate_followup(lead: dict, reply_body: str) -> dict:
+    """Generate a helpful answer to the lead's question using Nemotron."""
+    prompt = f"""A prospect named {lead['contact']} at {lead['company']} replied to our cold email with a question or request for more info.
+
+    Their reply:
+    "{reply_body}"
+
+    Write a helpful follow-up email that:
+    - Directly answers their specific question or concern
+    - Keeps it under 120 words
+    - Is knowledgeable and confident, not evasive
+    - Ends with a soft CTA suggesting a 15-min call to discuss further
+    - Sign off as "Alex" from "SalesHermes"
+
+    Return ONLY a JSON object with "subject" and "body" keys. No markdown, no code fences."""
+
+    try:
+        response = client.chat.completions.create(
+            model=MODEL,
+            messages=[
+                {"role": "system", "content": "You are a helpful B2B sales consultant. Answer questions directly and concisely. Return only valid JSON."},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.5,
+            max_tokens=400,
+            timeout=30,
+        )
+        raw = response.choices[0].message.content.strip()
+
+        if raw.startswith("```"):
+            raw = raw.split("\n", 1)[1]
+            raw = raw.rsplit("```", 1)[0]
+            raw = raw.strip()
+
+        import json
+        email_dict = json.loads(raw)
+        print(f"[EMAIL] Generated followup for {lead['contact']} at {lead['company']}")
+        print(f"  Subject: {email_dict['subject']}")
+        return email_dict
+
+    except Exception as e:
+        print(f"[EMAIL] Failed to generate followup: {e}")
+        return {
+            "subject": f"Re: Your question about SalesHermes",
+            "body": f"Hi {lead['contact']},\n\nGreat question! I'd love to walk you through the details on a quick 15-minute call — much easier than going back and forth over email.\n\nWould that work for you?\n\nBest,\nAlex"
+        }
+
+
 def _find_thread(to: str):
     """Search Sent folder for the last email to this exact recipient. Returns (Message-ID, Subject) or (None, None)."""
     try:
