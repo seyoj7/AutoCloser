@@ -110,11 +110,21 @@ def main():
             else:
                 print(f"[MAIN] No response yet to meeting link from {lead['company']}")
 
-        # meeting_booked -> waiting for meeting to happen
+        # meeting_booked -> verify via Calendly if meeting is done
         elif lead["status"] == "meeting_booked":
-            print(f"\n--- Awaiting Meeting ({lead['company']}) ---")
-            print(f"[MAIN] {lead['contact']} has booked. Waiting for meeting to complete.")
-            print(f"[MAIN] Mark as 'meeting_completed' in leads.csv after the call.")
+            print(f"\n--- Meeting Verification ({lead['company']}) ---")
+
+            if scheduler.check_meeting_completed(lead["email"]):
+                csv_reader.mark_lead_status(DATA_PATH, lead["email"], "meeting_completed")
+
+                invoice_url = billing.create_invoice(lead, 2000, "15-min consulting call")
+                if invoice_url:
+                    csv_reader.mark_lead_status(DATA_PATH, lead["email"], "invoiced")
+                    print(f"[MAIN] Invoice sent: {invoice_url}")
+                else:
+                    print(f"[MAIN] Invoice creation skipped (no Stripe key?)")
+            else:
+                print(f"[MAIN] Meeting not yet completed for {lead['company']}. Will check again next cycle.")
 
         # meeting_completed -> send invoice
         elif lead["status"] == "meeting_completed":
