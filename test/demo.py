@@ -1,16 +1,16 @@
 import os
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from skills import csv_reader
-from skills import research
-from skills import email_agent
-from skills import scheduler
-from skills import billing
+from scripts import csv_reader
+from scripts import research
+from scripts import email_agent
+from scripts import scheduler
+from scripts import billing
 
-DATA_PATH = os.path.join(os.path.dirname(__file__), "data", "leads.csv")
-SERVICES_PATH = os.path.join(os.path.dirname(__file__), "data", "services.csv")
+DATA_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "leads.csv")
+SERVICES_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "services.csv")
 
 
 def _pick_and_invoice(lead: dict) -> bool:

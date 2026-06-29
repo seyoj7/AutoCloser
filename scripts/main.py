@@ -7,12 +7,12 @@ from openai import OpenAI
 from dotenv import load_dotenv
 
 load_dotenv()
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from skills import csv_reader, research, email_agent, scheduler, billing
+from scripts import csv_reader, research, email_agent, scheduler, billing
 
-DATA_PATH = os.path.join(os.path.dirname(__file__), "data", "leads.csv")
-SERVICES_PATH = os.path.join(os.path.dirname(__file__), "data", "services.csv")
+DATA_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "leads.csv")
+SERVICES_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "services.csv")
 
 # Nemotron client for agent reasoning
 client = OpenAI(
@@ -286,7 +286,7 @@ TOOLS = [
 def execute_tool(name: str, args: dict) -> str:
     global _leads_cache
 
-    print(f"\n  🔧 {name}({', '.join(f'{k}={repr(v)[:60]}' for k, v in args.items())})")
+    print(f"\n  [TOOL] {name}({', '.join(f'{k}={repr(v)[:60]}' for k, v in args.items())})")
 
     try:
         # ── load_leads ──
@@ -420,7 +420,7 @@ def execute_tool(name: str, args: dict) -> str:
             return json.dumps({"error": f"Unknown tool: {name}"})
 
     except Exception as e:
-        print(f"  ❌ Tool error: {e}")
+        print(f"  [ERROR] Tool error: {e}")
         return json.dumps({"error": str(e)})
 
 
@@ -452,7 +452,7 @@ def run_agent_cycle():
                 timeout=60,
             )
         except Exception as e:
-            print(f"\n[AGENT] ❌ Nemotron API error: {e}")
+            print(f"\n[AGENT] [ERROR] Nemotron API error: {e}")
             break
 
         choice = response.choices[0]
@@ -479,7 +479,7 @@ def run_agent_cycle():
             })
 
     if step >= MAX_STEPS:
-        print(f"\n[AGENT] ⚠️ Hit max steps ({MAX_STEPS}), ending cycle.")
+        print(f"\n[AGENT] [WARN] Hit max steps ({MAX_STEPS}), ending cycle.")
 
     # Final status
     print("\n--- FINAL STATUS ---")
