@@ -10,248 +10,54 @@ description: >
   the AutoCloser outreach pipeline (research, email, scheduling, billing, lead status).
 ---
 
-# AutoCloser — Hermes Skill
+# AutoCloser — Autonomous B2B Sales Agent
 
 ## Overview
 
-AutoCloser exposes every pipeline action as an **individual callable tool** via
-`scripts/skill_api.py`. You call one tool at a time, inspect the JSON result,
-then decide the next step.
+AutoCloser is a standalone Hermes-pattern agent powered by **NVIDIA Nemotron**.
+The orchestrator (`scripts/main.py`) feeds Nemotron a system prompt and a set
+of tool definitions. Nemotron then **autonomously decides** which tool to call,
+reads the result, and picks the next action — looping until every lead has been
+processed. No hardcoded branching; the model drives the entire pipeline.
 
-> **DO NOT** run `main.py`. That file runs its own internal Nemotron agent loop
-> and will conflict with Hermes. Always use `skill_api.py` instead.
+```
+main.py starts → Nemotron reasons → picks a tool → executes it → sees result
+              → picks next tool → ... → "CYCLE COMPLETE" → sleeps 15 min → repeat
+```
 
----
-
-## How to Call a Tool
-
-Every tool call follows this pattern:
+Run it with:
 
 ```bash
-python scripts/skill_api.py '{"tool": "<tool_name>", "args": {...}}'
+cd <project_root>
+python scripts/main.py
 ```
-
-Every call:
-- Prints **one JSON object** to stdout
-- Returns `{"ok": true, ...result fields...}` on success
-- Returns `{"ok": false, "error": "..."}` on failure
-- Exits with code `0` (success) or `1` (error)
 
 ---
 
-## Tool Reference
-
-### `load_leads`
-Load all leads from `data/leads.csv` with their current pipeline status.
-**Always call this first** so you know what needs to be done.
-
-```bash
-python scripts/skill_api.py '{"tool": "load_leads"}'
-```
-Returns: `{"ok": true, "leads": [...], "count": N}`
-
----
-
-### `research_company`
-Scrape a lead's website with Playwright and summarize it using Nemotron.
-
-```bash
-python scripts/skill_api.py '{"tool": "research_company", "args": {"lead_email": "john@notion.so"}}'
-```
-Returns: `{"ok": true, "summary": "...", "company": "Notion"}`
-
----
-
-### `generate_email`
-Generate a personalized cold email using the research summary.
-
-```bash
-python scripts/skill_api.py '{
-  "tool": "generate_email",
-  "args": {
-    "lead_email": "john@notion.so",
-    "research_summary": "Notion is a productivity tool..."
-  }
-}'
-```
-Returns: `{"ok": true, "subject": "...", "body": "..."}`
-
----
-
-### `generate_followup`
-Write a follow-up email addressing a lead's specific question or objection.
-
-```bash
-python scripts/skill_api.py '{
-  "tool": "generate_followup",
-  "args": {
-    "lead_email": "john@notion.so",
-    "reply_body": "Can you tell me more about pricing?"
-  }
-}'
-```
-Returns: `{"ok": true, "subject": "...", "body": "..."}`
-
----
-
-### `send_email`
-Send an email via Gmail SMTP. Auto-threads into existing conversations.
-
-```bash
-python scripts/skill_api.py '{
-  "tool": "send_email",
-  "args": {
-    "to": "john@notion.so",
-    "subject": "Quick question about Notion docs",
-    "body": "Hi John, ..."
-  }
-}'
-```
-Returns: `{"ok": true, "sent": true, "to": "john@notion.so"}`
-
----
-
-### `check_replies`
-Poll Gmail IMAP for any replies from a specific lead (last 2 days).
-
-```bash
-python scripts/skill_api.py '{"tool": "check_replies", "args": {"lead_email": "john@notion.so"}}'
-```
-Returns: `{"ok": true, "replies": [...], "count": N}`
-
----
-
-### `analyze_reply`
-Classify a reply body with Nemotron into one of:
-`interested` | `not_interested` | `needs_more_info` | `unsubscribe`
-
-```bash
-python scripts/skill_api.py '{
-  "tool": "analyze_reply",
-  "args": {"reply_body": "Hi, we're interested! Tell me more."}
-}'
-```
-Returns: `{"ok": true, "classification": "interested"}`
-
----
-
-### `qualify_lead`
-Determine if a lead is worth pursuing based on their reply classification.
-
-```bash
-python scripts/skill_api.py '{
-  "tool": "qualify_lead",
-  "args": {"lead_email": "john@notion.so", "reply_analysis": "interested"}
-}'
-```
-Returns: `{"ok": true, "qualified": true, "company": "Notion"}`
-
----
-
-### `schedule_meeting`
-Send a Calendly booking link to a qualified lead via email.
-
-```bash
-python scripts/skill_api.py '{"tool": "schedule_meeting", "args": {"lead_email": "john@notion.so"}}'
-```
-Returns: `{"ok": true, "result": "Meeting link sent to John at john@notion.so"}`
-
----
-
-### `create_invoice`
-Create and email a Stripe invoice to the lead. If `amount_cents` is omitted or 0,
-the first service in `data/services.csv` is used automatically.
-
-```bash
-python scripts/skill_api.py '{
-  "tool": "create_invoice",
-  "args": {
-    "lead_email": "john@notion.so",
-    "amount_cents": 200000,
-    "description": "2-hour consulting session"
-  }
-}'
-```
-Returns: `{"ok": true, "invoice_url": "https://invoice.stripe.com/...", "invoiced": true}`
-
----
-
-### `check_payment_status`
-Check Stripe payment status for a lead's latest invoice.
-Automatically marks lead as `closed_won` if paid.
-
-```bash
-python scripts/skill_api.py '{"tool": "check_payment_status", "args": {"lead_email": "john@notion.so"}}'
-```
-Returns: `{"ok": true, "payment_status": "paid", "lead_email": "john@notion.so"}`
-
----
-
-### `mark_lead_status`
-Update a lead's pipeline stage in `data/leads.csv`.
-
-Valid statuses: `emailed` | `followup_sent` | `meeting_sent` | `meeting_booked` |
-`meeting_completed` | `invoiced` | `closed_won` | `not_interested`
-
-```bash
-python scripts/skill_api.py '{
-  "tool": "mark_lead_status",
-  "args": {"lead_email": "john@notion.so", "new_status": "emailed"}
-}'
-```
-Returns: `{"ok": true, "updated": true, "lead_email": "john@notion.so", "new_status": "emailed"}`
-
----
-
-## Full Pipeline Workflow
-
-Process leads one at a time. For each lead, follow its current `status`:
-
-### status = `new`
-1. `research_company` → get intel
-2. `generate_email` with research summary → get `{subject, body}`
-3. `send_email` with those values
-4. `mark_lead_status` → `emailed`
-
-### status = `emailed` or `followup_sent`
-1. `check_replies` → inspect replies
-2. For each reply: `analyze_reply`
-   - `interested` → `qualify_lead` → `schedule_meeting` → `mark_lead_status` → `meeting_sent`
-   - `needs_more_info` → `generate_followup` → `send_email` → `mark_lead_status` → `followup_sent`
-   - `not_interested` / `unsubscribe` → `mark_lead_status` → `not_interested`
-3. No replies → do nothing, check next cycle
-
-### status = `meeting_sent`
-1. `check_replies` → if lead confirms meeting: `mark_lead_status` → `meeting_booked`
-
-### status = `meeting_booked` or `meeting_completed`
-1. `create_invoice` → Stripe invoice created and emailed
-2. Status auto-advances to `invoiced`
-
-### status = `invoiced`
-1. `check_payment_status`
-2. If `paid` → status auto-advances to `closed_won`
-
-### status = `closed_won` or `not_interested`
-→ Skip
-
----
-
-## Lead Status Flow
+## Project Layout
 
 ```
-new → emailed → meeting_sent → meeting_booked → meeting_completed → invoiced → closed_won
-         ↓
-    followup_sent → (same as emailed)
-         ↓
-    not_interested (dead end, unless they reply again)
+Autocloser/
+├── .env                    # Secret env vars (never commit)
+├── .env.example            # Template for required env vars
+├── requirements.txt        # Python dependencies
+├── data/
+│   ├── leads.csv           # Lead database (status tracked here)
+│   └── services.csv        # Billable services menu (Stripe)
+├── scripts/
+│   ├── main.py             # Agent loop — Nemotron + tool executor
+│   ├── csv_reader.py       # Load leads, update statuses, load services
+│   ├── research.py         # Playwright scrape + Nemotron summarization
+│   ├── email_agent.py      # Email generation, SMTP send, IMAP reply check
+│   ├── scheduler.py        # Lead qualification + Calendly scheduling
+│   └── billing.py          # Stripe invoice creation & payment polling
 ```
 
 ---
 
 ## Required Environment Variables
 
-Set in `.env` (copy from `.env.example`):
+Set these in `.env` (copy from `.env.example`):
 
 | Variable            | Purpose                                        |
 |---------------------|------------------------------------------------|
@@ -265,25 +71,172 @@ Set in `.env` (copy from `.env.example`):
 | `SENDER_NAME`       | Your name (used in email signatures)           |
 | `COMPANY_NAME`      | Your company name (used in email copy)         |
 
+> **Gmail SMTP Note**: You must enable 2FA on your Google account and generate a
+> dedicated **App Password** at https://myaccount.google.com/apppasswords.
+> Using your normal password will cause authentication failures.
+
 ---
 
-## Setup (One-Time)
+## Dependencies
+
+Install all dependencies with:
 
 ```bash
 pip install -r requirements.txt
 python -m playwright install chromium
-cp .env.example .env
-# Fill in .env values
 ```
+
+| Package          | Version    | Purpose                                    |
+|------------------|------------|--------------------------------------------|
+| `openai`         | >= 1.0.0   | OpenAI-compatible client for Nemotron API  |
+| `python-dotenv`  | >= 1.0.0   | Load env vars from `.env`                  |
+| `playwright`     | >= 1.40.0  | Headless browser for website research      |
+| `stripe`         | >= 7.0.0   | Stripe invoice creation & payment tracking |
+| `requests`       | >= 2.31.0  | HTTP requests (Calendly API, etc.)         |
+
+---
+
+## How the Agent Works
+
+### Nemotron as the Brain
+
+**Model:** `nvidia/llama-3.3-nemotron-super-49b-v1`
+
+`main.py` sends Nemotron a system prompt describing the full pipeline workflow
+plus a list of tool definitions. It then calls the model with `tool_choice="auto"`,
+meaning Nemotron autonomously:
+
+1. Decides which tool to call next
+2. Provides the arguments
+3. Receives the JSON result
+4. Reasons about the next step
+5. Repeats until all leads are processed
+
+There is **no hardcoded if/else branching** for the pipeline — Nemotron decides
+the order and logic at runtime.
+
+### Tools Exposed to Nemotron
+
+| Tool                  | Description                                                  |
+|-----------------------|--------------------------------------------------------------|
+| `load_leads`          | Load all leads and their current status from CSV             |
+| `research_company`    | Scrape website with Playwright + summarize with Nemotron     |
+| `generate_email`      | Write a personalized cold email using research intel         |
+| `generate_followup`   | Write a follow-up addressing a lead's specific question      |
+| `send_email`          | Send email via Gmail SMTP (auto-threads replies)             |
+| `check_replies`       | Poll Gmail IMAP for replies from a specific lead             |
+| `analyze_reply`       | Classify reply sentiment with Nemotron                       |
+| `qualify_lead`        | Determine if a lead is worth pursuing                        |
+| `schedule_meeting`    | Send Calendly booking link to a qualified lead               |
+| `confirm_meeting`     | Human-in-the-loop: confirm meeting completion                |
+| `create_invoice`      | Present service menu, create & send Stripe invoice           |
+| `check_payment_status`| Poll Stripe for invoice payment status                       |
+| `mark_lead_status`    | Persist lead stage to CSV                                    |
+
+---
+
+## Lead Status Flow
+
+```
+new → emailed → meeting_sent → meeting_booked → meeting_completed → invoiced → closed_won
+         ↓
+    followup_sent → (same as emailed)
+         ↓
+    not_interested (dead end, unless they reply again)
+```
+
+### Per-Status Behavior
+
+| Status              | What Nemotron Does                                            |
+|---------------------|---------------------------------------------------------------|
+| `new`               | Research → generate email → send → mark `emailed`            |
+| `emailed`           | Check replies → classify → follow-up or schedule meeting      |
+| `followup_sent`     | Check replies → classify → qualify → schedule or stop         |
+| `meeting_sent`      | Check replies → if confirmed, mark `meeting_booked`           |
+| `meeting_booked`    | Ask operator if meeting done → mark `meeting_completed`       |
+| `meeting_completed` | Create Stripe invoice → mark `invoiced`                       |
+| `invoiced`          | Check Stripe payment → if paid, mark `closed_won`             |
+| `closed_won`        | Skip                                                          |
+| `not_interested`    | Check for change-of-heart replies                             |
+
+---
+
+## Step-by-Step Usage
+
+### 1. Prepare your leads CSV
+
+`data/leads.csv` must have these columns:
+
+```csv
+company,contact,email,website,status,notes
+Notion,John,john@notion.so,notion.so,new,
+Linear,Sara,sara@linear.app,linear.app,new,Interested in automation
+```
+
+### 2. Configure `.env`
+
+```bash
+cp .env.example .env
+# Fill in all required variables
+```
+
+### 3. Run the pipeline
+
+```bash
+python scripts/main.py
+```
+
+The orchestrator loops every 15 minutes. For a one-shot test, interrupt after the
+first cycle with `Ctrl+C`.
+
+### 4. Monitor output
+
+Watch the console for tool calls:
+
+```
+  [TOOL] load_leads()
+  [TOOL] research_company(lead_email='john@notion.so')
+  [TOOL] generate_email(lead_email='john@notion.so', research_summary='Notion is...')
+  [TOOL] send_email(to='john@notion.so', subject='Quick question about docs')
+  [TOOL] mark_lead_status(lead_email='john@notion.so', new_status='emailed')
+
+[AGENT] CYCLE COMPLETE
+```
+
+---
+
+## How to Verify It Worked
+
+1. **Emails sent**: Check your Gmail Sent folder for outgoing emails.
+2. **CSV updated**: Open `data/leads.csv` — status should change from `new` → `emailed`.
+3. **Reply detection**: Send a test reply from a lead email address; watch console for `[REPLY]`.
+4. **Calendly link**: Verify the lead received a meeting email with your Calendly URL.
+5. **Stripe invoice**: Log into your Stripe dashboard → Invoices tab.
+6. **Final status**: After payment, `data/leads.csv` should show `closed_won`.
+
+For quick smoke testing, use Gmail `+alias` addresses (e.g., `you+test1@gmail.com`).
 
 ---
 
 ## Common Pitfalls
 
-| Symptom | Fix |
-|---------|-----|
-| `SMTP auth failed` | Use a Gmail App Password (myaccount.google.com/apppasswords), not your account password |
-| `Playwright returns empty` | Run `python -m playwright install chromium` |
-| `No lead found with email` | Check email casing matches exactly what's in `data/leads.csv` |
-| `Stripe invoice failed` | Verify `STRIPE_SECRET_KEY` is set and valid |
-| `check_replies finds nothing` | Enable IMAP in Gmail Settings → Forwarding and POP/IMAP |
+| Symptom                        | Fix                                                                  |
+|--------------------------------|----------------------------------------------------------------------|
+| Gmail SMTP auth fails          | Use App Password, not account password. Enable 2FA first.            |
+| Playwright returns empty text  | Run `python -m playwright install chromium`.                         |
+| Nemotron returns empty email   | Check `NVIDIA_BASE_URL` and model ID.                                |
+| IMAP check_replies() empty     | Enable IMAP in Gmail Settings → Forwarding and POP/IMAP.            |
+| Stripe `No such customer`      | Email casing must be consistent in CSV.                              |
+| Lead status not updating       | `mark_lead_status()` uses email as key — check exact match.         |
+
+---
+
+## Extending the Pipeline
+
+To add a new pipeline stage:
+
+1. Create your function in the relevant script (or a new `scripts/my_stage.py`).
+2. Add a tool definition in `main.py`'s `TOOLS` list.
+3. Add an `elif name == "your_tool":` branch in `execute_tool()`.
+4. Update the system prompt to tell Nemotron when to call it.
+5. Call `csv_reader.mark_lead_status()` to advance the status.
