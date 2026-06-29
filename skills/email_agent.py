@@ -76,7 +76,6 @@ def generate_email(lead: dict, research_summary: str) -> dict:
 
 
 def generate_followup(lead: dict, reply_body: str) -> dict:
-    """Generate a helpful answer to the lead's question using Nemotron."""
     prompt = f"""A prospect named {lead['contact']} at {lead['company']} replied to our cold email with a question or request for more info.
 
     Their reply:
@@ -124,7 +123,6 @@ def generate_followup(lead: dict, reply_body: str) -> dict:
 
 
 def _find_thread(to: str):
-    """Search Sent folder for the last email to this exact recipient. Returns (Message-ID, Subject) or (None, None)."""
     try:
         mail = imaplib.IMAP4_SSL(IMAP_SERVER)
         mail.login(SMTP_USER, SMTP_PASSWORD)

@@ -30,7 +30,6 @@ def _human_scroll(page) -> None:
         _time.sleep(random.uniform(0.4, 1.0))
 
 
-
 def _scrape_website(url: str) -> str:
     from playwright.sync_api import sync_playwright
 
