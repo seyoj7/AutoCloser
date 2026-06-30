@@ -1,6 +1,10 @@
 /.env
 /agents.md
-/data
 /skills.md
 /scripts/__pycache__
 /test/__pycache__
+/data/notifications.log
+/data/leads.csv
+/data/services.csv
+/data/settings.json
+!/data/example/

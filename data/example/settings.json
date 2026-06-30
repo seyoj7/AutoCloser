@@ -1,0 +1,13 @@
+{
+    "sender_name": "Alex",
+    "company_name": "YourCompany",
+    "calendly_link": "https://calendly.com/yourname/15min",
+    "cycle_interval_minutes": 15,
+    "pipeline_mode": "ai",
+    "email_tone": "conversational",
+    "auto_confirm_meetings": false,
+    "auto_create_invoices": false,
+    "default_service_id": "2",
+    "max_email_words": 100,
+    "notifications_enabled": true
+}
