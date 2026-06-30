@@ -263,10 +263,25 @@ def check_replies(leads: list) -> list:
                     base_subject = base_subject[4:]
                 base_subject = base_subject.strip()
 
-                # Search inbox by thread subject
+                # Remove characters that break IMAP SUBJECT queries
+                import re as _re
+                safe_subject = _re.sub(r"[\"'\\]", " ", base_subject)
+                # Use first ~6 significant words to keep search broad but relevant
+                words = safe_subject.split()
+                if len(words) > 6:
+                    safe_subject = " ".join(words[:6])
+                safe_subject = safe_subject.strip()
+
+                # Search inbox by sanitized thread subject
                 status, messages = mail.search(
-                    None, f'(SUBJECT "{base_subject}" SINCE {since_date})'
+                    None, f'(SUBJECT "{safe_subject}" SINCE {since_date})'
                 )
+
+                # Fallback: if subject search found nothing, try by References header
+                if (status != "OK" or not messages[0]) and sent_msg_id:
+                    status, messages = mail.search(
+                        None, f'(HEADER References "{sent_msg_id}" SINCE {since_date})'
+                    )
             else:
                 # Fallback: search by FROM (works when leads have unique domains)
                 status, messages = mail.search(
