@@ -1,10 +1,3 @@
-"""
-AutoCloser — Notification System
-Fires formatted alerts on every pipeline status transition.
-Output goes to stdout (captured by Hermes gateway → Telegram/Discord/TUI).
-Optionally logs to data/notifications.log for audit trail.
-"""
-
 import os
 import sys
 from datetime import datetime

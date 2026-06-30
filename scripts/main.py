@@ -17,7 +17,6 @@ SERVICES_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__f
 
 
 def _pick_and_invoice(lead: dict) -> bool:
-    """Show service menu, let user pick, then create invoice. Returns True if sent."""
     services = csv_reader.load_services(SERVICES_PATH)
 
     if not services:

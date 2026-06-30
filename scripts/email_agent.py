@@ -27,7 +27,6 @@ IMAP_SERVER = "imap.gmail.com"
 
 
 def _get_sender_name() -> str:
-    """Get sender name from settings, falling back to env var."""
     try:
         from . import settings
         return settings.get("sender_name", os.getenv("SENDER_NAME", "Alex"))
@@ -36,7 +35,6 @@ def _get_sender_name() -> str:
 
 
 def _get_company_name() -> str:
-    """Get company name from settings, falling back to env var."""
     try:
         from . import settings
         return settings.get("company_name", os.getenv("COMPANY_NAME", "Autocloser"))
@@ -45,7 +43,6 @@ def _get_company_name() -> str:
 
 
 def _get_email_tone() -> str:
-    """Get email tone from settings."""
     try:
         from . import settings
         return settings.get("email_tone", "conversational")
@@ -54,7 +51,6 @@ def _get_email_tone() -> str:
 
 
 def _get_max_words() -> int:
-    """Get max email word count from settings."""
     try:
         from . import settings
         return settings.get("max_email_words", 100)
@@ -215,10 +211,8 @@ def send_email(to: str, subject: str, body: str) -> bool:
         msg["To"] = to
 
         if thread_msg_id:
-            # Reply in existing thread
             msg["In-Reply-To"] = thread_msg_id
             msg["References"] = thread_msg_id
-            # Use original subject with Re: prefix
             clean_subject = thread_subject.replace("Re: ", "")
             msg["Subject"] = f"Re: {clean_subject}"
             print(f"[EMAIL] Replying in thread: {msg['Subject']}")
@@ -336,7 +330,6 @@ def analyze_reply(reply_body: str) -> str:
         return "needs_more_info"
 
 
-# Quick self-test
 if __name__ == "__main__":
     test_lead = {
         "company": "TestCorp",

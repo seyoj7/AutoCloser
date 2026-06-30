@@ -1,9 +1,3 @@
-"""
-AutoCloser — Settings Manager
-Loads, saves, and provides access to runtime-tunable settings in data/settings.json.
-Falls back to sensible defaults if the file is missing or corrupted.
-"""
-
 import os
 import json
 
@@ -31,7 +25,6 @@ _cache = None
 
 
 def load_settings() -> dict:
-    """Load settings.json, merging with defaults for any missing keys."""
     global _cache
 
     settings = dict(DEFAULTS)
@@ -50,7 +43,6 @@ def load_settings() -> dict:
 
 
 def save_settings(settings: dict) -> None:
-    """Write settings dict back to settings.json."""
     global _cache
 
     os.makedirs(os.path.dirname(SETTINGS_PATH), exist_ok=True)
@@ -63,7 +55,6 @@ def save_settings(settings: dict) -> None:
 
 
 def get(key: str, default=None):
-    """Get a single setting value. Loads from file if not cached."""
     global _cache
 
     if _cache is None:
@@ -73,11 +64,6 @@ def get(key: str, default=None):
 
 
 def update(key: str, value) -> bool:
-    """
-    Update a single setting and save to disk.
-
-    Returns True if the key is valid, False if the key is unknown.
-    """
     global _cache
 
     if _cache is None:
@@ -113,14 +99,12 @@ def update(key: str, value) -> bool:
 
 
 def reset() -> dict:
-    """Reset all settings to defaults and save."""
     save_settings(dict(DEFAULTS))
     print("[SETTINGS] All settings reset to defaults.")
     return dict(DEFAULTS)
 
 
 def display() -> str:
-    """Return a formatted string of all current settings for display."""
     global _cache
 
     if _cache is None:

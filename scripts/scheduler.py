@@ -13,7 +13,6 @@ CALENDLY_API_BASE = "https://api.calendly.com"
 
 
 def _get_calendly_link() -> str:
-    """Get Calendly link from settings, falling back to env var."""
     try:
         from . import settings
         return settings.get("calendly_link", os.getenv("CALENDLY_LINK", "https://calendly.com/yourname/15min"))
@@ -22,7 +21,6 @@ def _get_calendly_link() -> str:
 
 
 def _get_sender_name() -> str:
-    """Get sender name from settings, falling back to env var."""
     try:
         from . import settings
         return settings.get("sender_name", os.getenv("SENDER_NAME", "Alex"))
@@ -38,7 +36,6 @@ def _calendly_headers():
 
 
 def _get_user_uri() -> str:
-    """Get the current Calendly user URI (needed to query events)."""
     try:
         resp = requests.get(f"{CALENDLY_API_BASE}/users/me", headers=_calendly_headers(), timeout=10)
         resp.raise_for_status()
@@ -49,7 +46,6 @@ def _get_user_uri() -> str:
 
 
 def check_meeting_completed(lead_email: str) -> bool:
-    """Query Calendly API to check if a meeting with this lead has ended."""
     if not CALENDLY_API_KEY:
         print("[SCHEDULER] WARNING: No CALENDLY_API_KEY set, cannot verify meeting status")
         return False

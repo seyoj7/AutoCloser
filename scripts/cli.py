@@ -1,21 +1,3 @@
-"""
-AutoCloser — CLI Interface
-Allows Hermes agent (or any user) to manage leads, services, and settings
-from the command line / chat interface.
-
-Usage:
-    python scripts/cli.py list-leads
-    python scripts/cli.py add-lead --company "Stripe" --contact "Patrick" --email "pat@stripe.com" --website "stripe.com"
-    python scripts/cli.py update-lead --email "pat@stripe.com" --field status --value meeting_sent
-    python scripts/cli.py remove-lead --email "pat@stripe.com"
-    python scripts/cli.py list-services
-    python scripts/cli.py add-service --id 5 --name "workshop" --description "Half-day workshop" --amount 75000
-    python scripts/cli.py pipeline-status
-    python scripts/cli.py show-settings
-    python scripts/cli.py set --key sender_name --value "Jordan"
-    python scripts/cli.py reset-settings
-"""
-
 import os
 import sys
 import argparse
