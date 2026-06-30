@@ -42,6 +42,7 @@ def mark_lead_status(path: str, email: str, new_status: str) -> bool:
 
     leads = []
     updated = False
+    lead_data = None
 
     with open(path, newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
@@ -50,6 +51,7 @@ def mark_lead_status(path: str, email: str, new_status: str) -> bool:
             if row["email"].strip() == email:
                 row["status"] = new_status
                 updated = True
+                lead_data = dict(row)
             leads.append(row)
 
     if updated:
@@ -58,10 +60,159 @@ def mark_lead_status(path: str, email: str, new_status: str) -> bool:
             writer.writeheader()
             writer.writerows(leads)
         print(f"[CSV_READER] OK {email} -> status: {new_status}")
+
+        # Fire notification for status change
+        try:
+            from . import notifications
+            if lead_data:
+                notifications.notify(lead_data, new_status)
+        except ImportError:
+            pass  # notifications module not available (standalone mode)
     else:
         print(f"[CSV_READER] WARNING: No lead found with email: {email}")
 
     return updated
+
+
+def add_lead(path: str, company: str, contact: str, email: str,
+             website: str, notes: str = "", status: str = "new") -> bool:
+    """Append a new lead row to the CSV. Returns False if email already exists."""
+    fieldnames = ["company", "contact", "email", "website", "notes", "status"]
+
+    # Check for duplicate email
+    if os.path.exists(path):
+        existing = load_leads(path)
+        for lead in existing:
+            if lead["email"].strip().lower() == email.strip().lower():
+                print(f"[CSV_READER] Lead already exists: {email}")
+                return False
+
+    # If file doesn't exist, create it with headers
+    file_exists = os.path.exists(path)
+
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+
+    with open(path, "a", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        if not file_exists:
+            writer.writeheader()
+        writer.writerow({
+            "company": company,
+            "contact": contact,
+            "email": email,
+            "website": website,
+            "notes": notes,
+            "status": status,
+        })
+
+    print(f"[CSV_READER] Added lead: {contact} at {company} ({email})")
+    return True
+
+
+def update_lead_field(path: str, email: str, field: str, value: str) -> bool:
+    """Update a specific field for a lead identified by email."""
+    if not os.path.exists(path):
+        print(f"[CSV_READER] File not found: {path}")
+        return False
+
+    leads = []
+    updated = False
+
+    with open(path, newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        fieldnames = reader.fieldnames
+        for row in reader:
+            if row["email"].strip() == email:
+                if field in row:
+                    old_value = row[field]
+                    row[field] = value
+                    updated = True
+                    print(f"[CSV_READER] Updated {email}: {field} '{old_value}' -> '{value}'")
+                else:
+                    print(f"[CSV_READER] Field '{field}' not found in CSV")
+                    return False
+            leads.append(row)
+
+    if updated:
+        with open(path, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(leads)
+
+        # If status was updated, fire notification
+        if field == "status":
+            try:
+                from . import notifications
+                lead_data = next((l for l in leads if l["email"].strip() == email), {})
+                notifications.notify(lead_data, value)
+            except ImportError:
+                pass
+    else:
+        print(f"[CSV_READER] WARNING: No lead found with email: {email}")
+
+    return updated
+
+
+def remove_lead(path: str, email: str) -> bool:
+    """Remove a lead row by email. Returns False if not found."""
+    if not os.path.exists(path):
+        print(f"[CSV_READER] File not found: {path}")
+        return False
+
+    leads = []
+    removed = False
+
+    with open(path, newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        fieldnames = reader.fieldnames
+        for row in reader:
+            if row["email"].strip() == email:
+                removed = True
+                print(f"[CSV_READER] Removed lead: {row.get('contact', '?')} at {row.get('company', '?')} ({email})")
+                continue  # Skip this row (don't add to list)
+            leads.append(row)
+
+    if removed:
+        with open(path, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(leads)
+    else:
+        print(f"[CSV_READER] WARNING: No lead found with email: {email}")
+
+    return removed
+
+
+def add_service(path: str, service_id: str, name: str,
+                description: str, amount_cents: int) -> bool:
+    """Append a new service to services.csv. Returns False if ID already exists."""
+    fieldnames = ["id", "name", "description", "amount_cents"]
+
+    # Check for duplicate ID
+    if os.path.exists(path):
+        existing = load_services(path)
+        for svc in existing:
+            if svc["id"] == service_id:
+                print(f"[CSV_READER] Service ID already exists: {service_id}")
+                return False
+
+    file_exists = os.path.exists(path)
+
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+
+    with open(path, "a", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        if not file_exists:
+            writer.writeheader()
+        writer.writerow({
+            "id": service_id,
+            "name": name,
+            "description": description,
+            "amount_cents": amount_cents,
+        })
+
+    print(f"[CSV_READER] Added service: [{service_id}] {name} — ${amount_cents / 100:.2f}")
+    return True
 
 
 # Quick self-test

@@ -2,6 +2,7 @@ import os
 import sys
 import json
 import time
+import argparse
 from datetime import datetime, timedelta
 from openai import OpenAI
 from dotenv import load_dotenv
@@ -10,6 +11,8 @@ load_dotenv()
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from scripts import csv_reader, research, email_agent, scheduler, billing
+from scripts import settings as agent_settings
+from scripts import notifications
 
 DATA_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "leads.csv")
 SERVICES_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "services.csv")
@@ -368,25 +371,37 @@ def execute_tool(name: str, args: dict) -> str:
             result = scheduler.schedule_meeting(lead)
             return json.dumps({"result": result})
 
-        # ── confirm_meeting (human-in-the-loop) ──
+        # ── confirm_meeting (human-in-the-loop or auto) ──
         elif name == "confirm_meeting":
             lead = _get_lead(args["lead_email"])
             if not lead:
                 return json.dumps({"error": f"Lead not found: {args['lead_email']}"})
-            done = input(
-                f"  Has the meeting with {lead['contact']} at {lead['company']} been completed? (y/n): "
-            ).strip().lower()
+
+            auto_confirm = agent_settings.get("auto_confirm_meetings", False) or _no_input_mode
+            if auto_confirm:
+                print(f"  [AUTO] Meeting with {lead['contact']} at {lead['company']} auto-confirmed.")
+                done = "y"
+            else:
+                done = input(
+                    f"  Has the meeting with {lead['contact']} at {lead['company']} been completed? (y/n): "
+                ).strip().lower()
             return json.dumps({"completed": done == "y"})
 
-        # ── create_invoice (human-in-the-loop service picker) ──
+        # ── create_invoice (human-in-the-loop or auto service picker) ──
         elif name == "create_invoice":
             lead = _get_lead(args["lead_email"])
             if not lead:
                 return json.dumps({"error": f"Lead not found: {args['lead_email']}"})
 
-            confirm = input(
-                f"  Create & send Stripe invoice to {lead['contact']} at {lead['company']}? (y/n): "
-            ).strip().lower()
+            auto_invoice = agent_settings.get("auto_create_invoices", False) or _no_input_mode
+            if auto_invoice:
+                print(f"  [AUTO] Creating invoice for {lead['contact']} at {lead['company']}...")
+                confirm = "y"
+            else:
+                confirm = input(
+                    f"  Create & send Stripe invoice to {lead['contact']} at {lead['company']}? (y/n): "
+                ).strip().lower()
+
             if confirm != "y":
                 return json.dumps({"invoiced": False, "skipped": True})
 
@@ -394,11 +409,16 @@ def execute_tool(name: str, args: dict) -> str:
             if not services:
                 return json.dumps({"error": "No services in data/services.csv"})
 
-            print(f"\n  Available services:")
-            for s in services:
-                print(f"    [{s['id']}] {s['name']:25s}  ${s['amount_cents'] / 100:.2f}  —  {s['description']}")
+            if auto_invoice:
+                default_id = agent_settings.get("default_service_id", "2")
+                choice = default_id
+                print(f"  [AUTO] Selected service ID: {choice}")
+            else:
+                print(f"\n  Available services:")
+                for s in services:
+                    print(f"    [{s['id']}] {s['name']:25s}  ${s['amount_cents'] / 100:.2f}  —  {s['description']}")
+                choice = input(f"  Select service ID to invoice [default=2]: ").strip() or "2"
 
-            choice = input(f"  Select service ID to invoice [default=2]: ").strip() or "2"
             service = next((s for s in services if s["id"] == choice), services[0])
             invoice_url = billing.create_invoice(lead, service["amount_cents"], service["description"])
 
@@ -481,20 +501,39 @@ def run_agent_cycle():
     if step >= MAX_STEPS:
         print(f"\n[AGENT] [WARN] Hit max steps ({MAX_STEPS}), ending cycle.")
 
-    # Final status
-    print("\n--- FINAL STATUS ---")
+    # Final status with notification summary
     leads = csv_reader.load_leads(DATA_PATH)
-    for lead in leads:
-        print(f"  {lead['company']:12s} | {lead['status']}")
+    notifications.notify_summary(leads)
 
     print("\n" + "=" * 60)
     print("[OK] Agent cycle complete!")
     print("=" * 60)
 
 
-# ── Main loop (15-min interval) ──────────────────────────────
+# ── Global flag for no-input mode ────────────────────────────
+_no_input_mode = False
+
+
+# ── Main loop ────────────────────────────────────────────────
 if __name__ == "__main__":
-    INTERVAL = 15 * 60  # 15 minutes
+    parser = argparse.ArgumentParser(description="AutoCloser — Autonomous B2B Sales Agent")
+    parser.add_argument(
+        "--single-cycle", action="store_true",
+        help="Run one pipeline cycle and exit (for Hermes skill invocation)",
+    )
+    parser.add_argument(
+        "--no-input", action="store_true",
+        help="Skip all input() prompts — auto-confirm meetings and invoices",
+    )
+    cli_args = parser.parse_args()
+
+    # Load settings
+    agent_settings.load_settings()
+    INTERVAL = agent_settings.get("cycle_interval_minutes", 15) * 60
+
+    if cli_args.no_input:
+        _no_input_mode = True
+        print("[AGENT] Running in no-input mode (auto-confirm enabled)")
 
     cycle = 1
     try:
@@ -505,9 +544,14 @@ if __name__ == "__main__":
 
             run_agent_cycle()
 
+            if cli_args.single_cycle:
+                print("\n[AGENT] Single-cycle mode — exiting.")
+                break
+
             cycle += 1
             next_run = datetime.now() + timedelta(seconds=INTERVAL)
-            print(f"\n[LOOP] Next cycle at {next_run.strftime('%H:%M:%S')} (15 min). Press Ctrl+C to stop.")
+            interval_min = INTERVAL // 60
+            print(f"\n[LOOP] Next cycle at {next_run.strftime('%H:%M:%S')} ({interval_min} min). Press Ctrl+C to stop.")
             time.sleep(INTERVAL)
 
     except KeyboardInterrupt:

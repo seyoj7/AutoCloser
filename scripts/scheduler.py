@@ -6,9 +6,26 @@ from . import email_agent
 
 load_dotenv()
 
-CALENDLY_LINK = os.getenv("CALENDLY_LINK", "https://calendly.com/yourname/15min")
 CALENDLY_API_KEY = os.getenv("CALENDLY_API_KEY", "")
 CALENDLY_API_BASE = "https://api.calendly.com"
+
+
+def _get_calendly_link() -> str:
+    """Get Calendly link from settings, falling back to env var."""
+    try:
+        from . import settings
+        return settings.get("calendly_link", os.getenv("CALENDLY_LINK", "https://calendly.com/yourname/15min"))
+    except Exception:
+        return os.getenv("CALENDLY_LINK", "https://calendly.com/yourname/15min")
+
+
+def _get_sender_name() -> str:
+    """Get sender name from settings, falling back to env var."""
+    try:
+        from . import settings
+        return settings.get("sender_name", os.getenv("SENDER_NAME", "Alex"))
+    except Exception:
+        return os.getenv("SENDER_NAME", "Alex")
 
 
 def _calendly_headers():
@@ -81,16 +98,16 @@ def qualify_lead(lead: dict, reply_analysis: str) -> bool:
     return qualified
 
 
-SENDER_NAME = os.getenv("SENDER_NAME", "Alex")
-
-
 def schedule_meeting(lead: dict) -> str:
+    sender = _get_sender_name()
+    calendly = _get_calendly_link()
+
     message = (
         f"Hi {lead['contact']},\n\n"
         f"Thanks for your interest! I'd love to set up a quick 15-minute call.\n\n"
-        f"Pick a time that works for you: {CALENDLY_LINK}\n\n"
+        f"Pick a time that works for you: {calendly}\n\n"
         f"Looking forward to it!\n"
-        f"{SENDER_NAME}"
+        f"{sender}"
     )
 
     subject = "Let's connect -- 15 min call"

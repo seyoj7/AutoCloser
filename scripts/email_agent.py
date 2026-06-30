@@ -22,23 +22,63 @@ SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
 SMTP_SERVER = "smtp.gmail.com"
 SMTP_PORT = 587
 IMAP_SERVER = "imap.gmail.com"
-SENDER_NAME = os.getenv("SENDER_NAME", "Alex")
-COMPANY_NAME = os.getenv("COMPANY_NAME", "Autocloser")
+
+
+def _get_sender_name() -> str:
+    """Get sender name from settings, falling back to env var."""
+    try:
+        from . import settings
+        return settings.get("sender_name", os.getenv("SENDER_NAME", "Alex"))
+    except Exception:
+        return os.getenv("SENDER_NAME", "Alex")
+
+
+def _get_company_name() -> str:
+    """Get company name from settings, falling back to env var."""
+    try:
+        from . import settings
+        return settings.get("company_name", os.getenv("COMPANY_NAME", "Autocloser"))
+    except Exception:
+        return os.getenv("COMPANY_NAME", "Autocloser")
+
+
+def _get_email_tone() -> str:
+    """Get email tone from settings."""
+    try:
+        from . import settings
+        return settings.get("email_tone", "conversational")
+    except Exception:
+        return "conversational"
+
+
+def _get_max_words() -> int:
+    """Get max email word count from settings."""
+    try:
+        from . import settings
+        return settings.get("max_email_words", 100)
+    except Exception:
+        return 100
+
 
 
 def generate_email(lead: dict, research_summary: str) -> dict:
+    sender = _get_sender_name()
+    company = _get_company_name()
+    tone = _get_email_tone()
+    max_words = _get_max_words()
+
     prompt = f"""Write a short, personalized cold B2B email to {lead['contact']} at {lead['company']}.
 
     Use this research about their company:
     {research_summary}
 
     Rules:
-    - Keep it under 100 words
-    - Be conversational, not salesy
+    - Keep it under {max_words} words
+    - Be {tone}, not salesy
     - Reference something specific about their company from the research
     - End with a soft CTA (suggest a 15-min call)
     - Don't use generic phrases like "I hope this email finds you well"
-    - Sign off as "{SENDER_NAME}" from "{COMPANY_NAME}"
+    - Sign off as "{sender}" from "{company}"
 
     Return ONLY a JSON object with "subject" and "body" keys. No markdown, no code fences."""
 
@@ -69,13 +109,18 @@ def generate_email(lead: dict, research_summary: str) -> dict:
 
     except Exception as e:
         print(f"[EMAIL] Failed to generate email: {e}")
+        sender = _get_sender_name()
         return {
             "subject": f"Quick question for {lead['contact']}",
-            "body": f"Hi {lead['contact']},\n\nI came across {lead['company']} and would love to chat about how we might help. Do you have 15 minutes this week?\n\nBest,\n{SENDER_NAME}"
+            "body": f"Hi {lead['contact']},\n\nI came across {lead['company']} and would love to chat about how we might help. Do you have 15 minutes this week?\n\nBest,\n{sender}"
         }
 
 
 def generate_followup(lead: dict, reply_body: str) -> dict:
+    sender = _get_sender_name()
+    company = _get_company_name()
+    tone = _get_email_tone()
+
     prompt = f"""A prospect named {lead['contact']} at {lead['company']} replied to our cold email with a question or request for more info.
 
     Their reply:
@@ -84,9 +129,9 @@ def generate_followup(lead: dict, reply_body: str) -> dict:
     Write a helpful follow-up email that:
     - Directly answers their specific question or concern
     - Keeps it under 120 words
-    - Is knowledgeable and confident, not evasive
+    - Is {tone} and confident, not evasive
     - Ends with a soft CTA suggesting a 15-min call to discuss further
-    - Sign off as "{SENDER_NAME}" from "{COMPANY_NAME}"
+    - Sign off as "{sender}" from "{company}"
 
     Return ONLY a JSON object with "subject" and "body" keys. No markdown, no code fences."""
 
@@ -116,9 +161,10 @@ def generate_followup(lead: dict, reply_body: str) -> dict:
 
     except Exception as e:
         print(f"[EMAIL] Failed to generate followup: {e}")
+        sender = _get_sender_name()
         return {
-            "subject": f"Re: Your question about SalesHermes",
-            "body": f"Hi {lead['contact']},\n\nGreat question! I'd love to walk you through the details on a quick 15-minute call — much easier than going back and forth over email.\n\nWould that work for you?\n\nBest,\n{SENDER_NAME}"
+            "subject": f"Re: Your question about {_get_company_name()}",
+            "body": f"Hi {lead['contact']},\n\nGreat question! I'd love to walk you through the details on a quick 15-minute call — much easier than going back and forth over email.\n\nWould that work for you?\n\nBest,\n{sender}"
         }
 
 
